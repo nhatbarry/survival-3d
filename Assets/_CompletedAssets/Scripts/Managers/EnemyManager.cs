@@ -10,10 +10,19 @@ namespace CompleteProject
         public Transform[] spawnPoints;         // An array of the spawn points this enemy can spawn from.
 
 
-        void Start ()
+        float timer;                            // Time since the last spawn.
+
+
+        void Update ()
         {
-            // Call the Spawn function after a delay of the spawnTime and then continue to call after the same amount of time.
-            InvokeRepeating ("Spawn", spawnTime, spawnTime);
+            timer += Time.deltaTime;
+
+            // The spawn interval shrinks as the waves go on.
+            if(timer >= spawnTime * WaveManager.CurrentSpawnIntervalMultiplier)
+            {
+                timer = 0f;
+                Spawn ();
+            }
         }
 
 
@@ -30,7 +39,14 @@ namespace CompleteProject
             int spawnPointIndex = Random.Range (0, spawnPoints.Length);
 
             // Create an instance of the enemy prefab at the randomly selected spawn point's position and rotation.
-            Instantiate (enemy, spawnPoints[spawnPointIndex].position, spawnPoints[spawnPointIndex].rotation);
+            GameObject spawned = Instantiate (enemy, spawnPoints[spawnPointIndex].position, spawnPoints[spawnPointIndex].rotation);
+
+            // Enemies get tougher in later waves.
+            EnemyHealth enemyHealth = spawned.GetComponent <EnemyHealth> ();
+            if(enemyHealth != null)
+            {
+                enemyHealth.ApplyHealthMultiplier (WaveManager.CurrentEnemyHealthMultiplier);
+            }
         }
     }
 }

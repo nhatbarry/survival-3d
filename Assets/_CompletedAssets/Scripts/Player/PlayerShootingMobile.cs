@@ -11,8 +11,6 @@ namespace CompleteProject
         public float range = 100f;                      // The distance the gun can fire.
         
         float timer;                                    // A timer to determine when to fire.
-        Ray shootRay;                                   // A ray from the gun end forwards.
-        RaycastHit shootHit;                            // A raycast hit to get information about what was hit.
         int shootableMask;                              // A layer mask so the raycast only hits things on the shootable layer.
         ParticleSystem gunParticles;                    // Reference to the particle system.
         LineRenderer gunLine;                           // Reference to the line renderer.
@@ -20,6 +18,8 @@ namespace CompleteProject
         Light gunLight;                                 // Reference to the light component.
 		public Light faceLight;								// Duh
         float effectsDisplayTime = 0.2f;                // The proportion of the timeBetweenBullets that the effects will display for.
+        GunBeams gunBeams;                              // Fires and draws the beams (more than one with the Multi Shot upgrade).
+        PlayerUpgrades upgrades;                        // Reference to the player's upgrades.
 
 
         void Awake ()
@@ -37,6 +37,7 @@ namespace CompleteProject
             gunLine = GetComponent <LineRenderer> ();
             gunAudio = GetComponent<AudioSource> ();
             gunLight = GetComponent<Light> ();
+            gunBeams = new GunBeams (transform, gunLine, shootableMask);
 			//faceLight = GetComponentInChildren<Light> ();
         }
 
@@ -69,7 +70,7 @@ namespace CompleteProject
         public void DisableEffects ()
         {
             // Disable the line renderer and the light.
-            gunLine.enabled = false;
+            gunBeams.Disable ();
 			faceLight.enabled = false;
             gunLight.enabled = false;
         }
@@ -91,36 +92,15 @@ namespace CompleteProject
             gunParticles.Stop ();
             gunParticles.Play ();
 
-            // Enable the line renderer and set it's first position to be the end of the gun.
-            gunLine.enabled = true;
-            gunLine.SetPosition (0, transform.position);
+            // The upgrades are added at runtime, so look them up lazily.
+            if(upgrades == null)
+                upgrades = GetComponentInParent <PlayerUpgrades> ();
 
-            // Set the shootRay so that it starts at the end of the gun and points forward from the barrel.
-            shootRay.origin = transform.position;
-            shootRay.direction = transform.forward;
+            int beamCount = upgrades != null ? upgrades.BeamCount : 1;
+            int pierceCount = upgrades != null ? upgrades.PierceCount : 0;
 
-            // Perform the raycast against gameobjects on the shootable layer and if it hits something...
-            if(Physics.Raycast (shootRay, out shootHit, range, shootableMask))
-            {
-                // Try and find an EnemyHealth script on the gameobject hit.
-                EnemyHealth enemyHealth = shootHit.collider.GetComponent <EnemyHealth> ();
-
-                // If the EnemyHealth component exist...
-                if(enemyHealth != null)
-                {
-                    // ... the enemy should take damage.
-                    enemyHealth.TakeDamage (damagePerShot, shootHit.point);
-                }
-
-                // Set the second position of the line renderer to the point the raycast hit.
-                gunLine.SetPosition (1, shootHit.point);
-            }
-            // If the raycast didn't hit anything on the shootable layer...
-            else
-            {
-                // ... set the second position of the line renderer to the fullest extent of the gun's range.
-                gunLine.SetPosition (1, shootRay.origin + shootRay.direction * range);
-            }
+            // Fire the beams, damaging any enemies they hit, and draw the lines.
+            gunBeams.Fire (range, damagePerShot, beamCount, pierceCount);
         }
     }
 }

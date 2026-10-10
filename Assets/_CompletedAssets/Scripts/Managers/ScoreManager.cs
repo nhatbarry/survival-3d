@@ -24,8 +24,16 @@ namespace CompleteProject
 
         void Update ()
         {
-            // Set the displayed text to be the word "Score" followed by the score value.
-            text.text = "Score: " + score;
+            // With the level system running the score is shown as XP on the HUD's XP bar, so display the level here.
+            if(LevelManager.HasInstance)
+            {
+                text.text = "LV " + LevelManager.Instance.Level;
+            }
+            else
+            {
+                // Set the displayed text to be the word "Score" followed by the score value.
+                text.text = "Score: " + score;
+            }
         }
     }
 }

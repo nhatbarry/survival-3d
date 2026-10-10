@@ -20,7 +20,8 @@ public class PauseManager : MonoBehaviour {
 	
 	void Update()
 	{
-		if (Input.GetKeyDown(KeyCode.Escape))
+		// The upgrade menu already has the game paused, don't let Escape unpause it.
+		if (Input.GetKeyDown(KeyCode.Escape) && !CompleteProject.UpgradeMenu.IsOpen)
 		{
 			canvas.enabled = !canvas.enabled;
 			Pause();

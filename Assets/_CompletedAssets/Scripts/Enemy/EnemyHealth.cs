@@ -1,4 +1,5 @@
-﻿using CaptainPinkTurd.UI.Popup;
+﻿using System;
+using CaptainPinkTurd.UI.Popup;
 using UnityEngine;
 
 namespace CompleteProject
@@ -13,6 +14,8 @@ namespace CompleteProject
         public float scoreTextTargetHeight = 3f;
         public AudioClip deathClip;                 // The sound to play when the enemy dies.
 
+        public static event Action<EnemyHealth> Killed;     // Raised whenever any enemy dies.
+
 
         Animator anim;                              // Reference to the animator.
         AudioSource enemyAudio;                     // Reference to the audio source.
@@ -20,6 +23,7 @@ namespace CompleteProject
         CapsuleCollider capsuleCollider;            // Reference to the capsule collider.
         bool isDead;                                // Whether the enemy is dead.
         bool isSinking;                             // Whether the enemy has started sinking through the floor.
+        int awardedScore;                           // The score this enemy gives, including the combo multiplier.
 
 
         void Awake ()
@@ -43,6 +47,13 @@ namespace CompleteProject
                 // ... move the enemy down by the sinkSpeed per second.
                 transform.Translate (-Vector3.up * sinkSpeed * Time.deltaTime);
             }
+        }
+
+
+        public void ApplyHealthMultiplier (float multiplier)
+        {
+            // Scale the health of a freshly spawned enemy (used by the wave system).
+            currentHealth = Mathf.Max (1, Mathf.RoundToInt (startingHealth * multiplier));
         }
 
 
@@ -85,8 +96,14 @@ namespace CompleteProject
             // Tell the animator that the enemy is dead.
             anim.SetTrigger ("Dead");
             
+            // Register the kill with the combo system and work out how much score this enemy is worth.
+            int multiplier = ComboManager.HasInstance ? ComboManager.Instance.RegisterKill () : 1;
+            awardedScore = scoreValue * multiplier;
+
             //Score text
-            scorePopup.InitializeText(scoreValue.ToString(), transform.position, scoreTextTargetHeight);
+            scorePopup.InitializeText(awardedScore.ToString(), transform.position, scoreTextTargetHeight);
+
+            Killed?.Invoke (this);
 
             // Change the audio clip of the audio source to the death clip and play it (this will stop the hurt clip playing).
             enemyAudio.clip = deathClip;
@@ -106,7 +123,7 @@ namespace CompleteProject
             isSinking = true;
 
             // Increase the score by the enemy's score value.
-            ScoreManager.score += scoreValue;
+            ScoreManager.score += awardedScore;
 
             // After 2 seconds destory the enemy.
             Destroy (gameObject, 2f);
