@@ -11,13 +11,33 @@ namespace CompleteProject
     {
         public Color waveColour = new Color (1f, 0.55f, 0.2f);
         public Color comboColour = new Color (1f, 0.85f, 0.2f);
+        public Color bigComboColour = new Color (1f, 0.62f, 0f);   // Deeper gold once the combo gets long.
+        public int bigComboCount = 10;                              // Combo count that switches to bigComboColour.
         public Color powerUpColour = new Color (0.6f, 0.9f, 1f);
         public Color xpColour = new Color (0.35f, 0.75f, 1f);
+
+        [Header ("Combo animation")]
+        public float comboMaxScale = 1.2f;          // Scale right after a kill, when the combo window is full.
+        public float comboMinScale = 0.55f;         // Scale just before the combo runs out.
+        public float comboPopScale = 1.5f;          // Peak scale of the pop on each kill.
+        public float comboPopUpTime = 0.08f;
+        public float comboPopSettleTime = 0.15f;
+
+        [Header ("Wave animation")]
+        public float waveHoldTime = 1.2f;           // How long the big wave title stays in the middle.
+        public float waveMoveTime = 0.6f;           // How long it takes to shrink up to the top edge.
+        public float waveDockedScale = 0.5f;        // Scale of the wave label once docked at the top.
+
+
+        static readonly Vector2 WaveTitleAnchor = new Vector2 (0.5f, 0.5f);
+        static readonly Vector2 WaveTitlePosition = new Vector2 (0f, 120f);
+        static readonly Vector2 WaveDockedAnchor = new Vector2 (0.5f, 1f);
+        static readonly Vector2 WaveDockedPosition = new Vector2 (0f, -25f);
 
 
         RectTransform hudRoot;
         Font font;
-        Text bestText, waveText, comboText, powerUpText, announceText, toastText, gameOverText, xpText;
+        Text bestText, waveText, comboText, powerUpText, toastText, gameOverText, xpText;
         RectTransform xpFill;
 
         PlayerHealth playerHealth;
@@ -31,7 +51,9 @@ namespace CompleteProject
         int shownScoreIntoLevel = -1;
         float shownProgress;
         int shownWave;
-        int shownMultiplier = 1;
+        int shownComboCount;
+        float comboPopElapsed;                      // Time since the last combo kill, drives the pop.
+        float comboPopStartScale;
         int shownBest = -1;
         int shownRapidFire = -1, shownDamageBoost = -1;
         bool gameOverShown;
@@ -77,22 +99,22 @@ namespace CompleteProject
             }
             bestText = CreateText ("BestText", new Vector2 (0f, 1f), new Vector2 (10f, -92f), new Vector2 (200f, 30f),
                 22, TextAnchor.MiddleCenter, new Color (1f, 1f, 1f, 0.7f));
-            // Top-centre.
-            waveText = CreateText ("WaveText", new Vector2 (0.5f, 1f), new Vector2 (0f, -10f), new Vector2 (300f, 40f),
-                30, TextAnchor.MiddleCenter, waveColour);
+            // Starts as a big title above the player, then shrinks and docks at the top edge (see ShowWave).
+            waveText = CreateText ("WaveText", WaveDockedAnchor, WaveDockedPosition, new Vector2 (500f, 80f),
+                64, TextAnchor.MiddleCenter, waveColour);
+            waveText.rectTransform.pivot = new Vector2 (0.5f, 0.5f);
+            waveText.rectTransform.localScale = Vector3.one * waveDockedScale;
+            // Bottom-centre, between the joysticks. Pivot in the middle so it scales around its centre.
+            comboText = CreateText ("ComboText", new Vector2 (0.5f, 0f), new Vector2 (0f, 80f), new Vector2 (400f, 60f),
+                44, TextAnchor.MiddleCenter, comboColour);
+            comboText.rectTransform.pivot = new Vector2 (0.5f, 0.5f);
             // Top-right.
-            comboText = CreateText ("ComboText", new Vector2 (1f, 1f), new Vector2 (-15f, -10f), new Vector2 (250f, 45f),
-                36, TextAnchor.MiddleRight, comboColour);
             powerUpText = CreateText ("PowerUpText", new Vector2 (1f, 1f), new Vector2 (-15f, -60f), new Vector2 (300f, 60f),
                 22, TextAnchor.UpperRight, powerUpColour);
-            // Centre of the screen, faded out until something happens.
-            announceText = CreateText ("AnnounceText", new Vector2 (0.5f, 0.5f), new Vector2 (0f, 120f), new Vector2 (500f, 80f),
-                64, TextAnchor.MiddleCenter, waveColour);
             toastText = CreateText ("ToastText", new Vector2 (0.5f, 0.5f), new Vector2 (0f, -90f), new Vector2 (500f, 50f),
                 32, TextAnchor.MiddleCenter, Color.white);
 
             comboText.gameObject.SetActive (false);
-            announceText.color = Color.clear;
             toastText.color = Color.clear;
         }
 
@@ -111,9 +133,8 @@ namespace CompleteProject
 
         void OnDestroy ()
         {
-            if(announceText != null) announceText.DOKill ();
+            if(waveText != null) waveText.rectTransform.DOKill ();
             if(toastText != null) toastText.DOKill ();
-            if(comboText != null) comboText.rectTransform.DOKill ();
         }
 
 
@@ -172,8 +193,31 @@ namespace CompleteProject
                 return;
 
             shownWave = waveManager.CurrentWave;
-            waveText.text = "WAVE " + shownWave;
-            Flash (announceText, "WAVE " + shownWave, waveColour, 1.5f);
+            ShowWave ("WAVE " + shownWave);
+        }
+
+
+        // Pops the wave title in above the player, holds it, then shrinks it into the top-centre of the screen.
+        void ShowWave (string message)
+        {
+            RectTransform rect = waveText.rectTransform;
+            rect.DOKill ();
+
+            waveText.text = message;
+            rect.anchorMin = WaveTitleAnchor;
+            rect.anchorMax = WaveTitleAnchor;
+            rect.anchoredPosition = WaveTitlePosition;
+            rect.localScale = Vector3.one * 0.6f;
+
+            // Tweening the anchors and the position together slides it smoothly from the middle to the top edge.
+            DOTween.Sequence ()
+                .SetTarget (rect)
+                .Append (rect.DOScale (1f, 0.3f).SetEase (Ease.OutBack))
+                .AppendInterval (waveHoldTime)
+                .Append (rect.DOAnchorMin (WaveDockedAnchor, waveMoveTime).SetEase (Ease.InOutCubic))
+                .Join (rect.DOAnchorMax (WaveDockedAnchor, waveMoveTime).SetEase (Ease.InOutCubic))
+                .Join (rect.DOAnchorPos (WaveDockedPosition, waveMoveTime).SetEase (Ease.InOutCubic))
+                .Join (rect.DOScale (waveDockedScale, waveMoveTime).SetEase (Ease.InOutCubic));
         }
 
 
@@ -182,34 +226,59 @@ namespace CompleteProject
             if(comboManager == null)
                 return;
 
-            int multiplier = comboManager.Multiplier;
+            int count = comboManager.ComboCount;
 
-            if(multiplier > 1)
+            // A combo starts with the second kill in a row.
+            if(count < 2)
             {
-                comboText.gameObject.SetActive (true);
+                comboText.gameObject.SetActive (false);
+                shownComboCount = count;
+                return;
+            }
 
-                // Fade the text out as the combo window runs out.
-                Color colour = comboColour;
-                colour.a = Mathf.Lerp (0.35f, 1f, comboManager.TimeRemainingNormalized);
-                comboText.color = colour;
+            comboText.gameObject.SetActive (true);
+            RectTransform rect = comboText.rectTransform;
 
-                if(multiplier != shownMultiplier)
-                {
-                    comboText.text = "x" + multiplier + " COMBO";
+            // Every new kill restarts the pop from whatever size the text has shrunk to.
+            if(count != shownComboCount)
+            {
+                shownComboCount = count;
+                comboText.text = "x" + count + " COMBO";
+                comboText.color = count >= bigComboCount ? bigComboColour : comboColour;
+                comboPopElapsed = 0f;
+                // A brand new combo pops in from small.
+                comboPopStartScale = count > 2 ? rect.localScale.x : 0.3f;
+            }
 
-                    if(multiplier > shownMultiplier)
-                    {
-                        comboText.rectTransform.DOKill (true);
-                        comboText.rectTransform.DOPunchScale (Vector3.one * 0.4f, 0.3f, 6);
-                    }
-                }
+            comboPopElapsed += Time.deltaTime;
+
+            // Resting size shrinks as the combo window runs out.
+            float restScale = Mathf.Lerp (comboMinScale, comboMaxScale, comboManager.TimeRemainingNormalized);
+            float scale;
+
+            if(comboPopElapsed < comboPopUpTime)
+            {
+                // Grow quickly up to the peak...
+                scale = Mathf.Lerp (comboPopStartScale, comboPopScale, EaseOut (comboPopElapsed / comboPopUpTime));
+            }
+            else if(comboPopElapsed < comboPopUpTime + comboPopSettleTime)
+            {
+                // ... then settle back down to the resting size.
+                scale = Mathf.Lerp (comboPopScale, restScale, EaseOut ((comboPopElapsed - comboPopUpTime) / comboPopSettleTime));
             }
             else
             {
-                comboText.gameObject.SetActive (false);
+                scale = restScale;
             }
 
-            shownMultiplier = multiplier;
+            rect.localScale = Vector3.one * scale;
+        }
+
+
+        static float EaseOut (float t)
+        {
+            t = 1f - Mathf.Clamp01 (t);
+            return 1f - t * t * t;
         }
 
 
@@ -249,7 +318,6 @@ namespace CompleteProject
             waveText.gameObject.SetActive (false);
             comboText.gameObject.SetActive (false);
             powerUpText.gameObject.SetActive (false);
-            announceText.gameObject.SetActive (false);
             toastText.gameObject.SetActive (false);
             if(xpFill != null)
                 xpFill.parent.gameObject.SetActive (false);

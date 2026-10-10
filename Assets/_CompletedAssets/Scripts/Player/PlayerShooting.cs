@@ -20,6 +20,7 @@ namespace CompleteProject
         float effectsDisplayTime = 0.2f;                // The proportion of the timeBetweenBullets that the effects will display for.
         GunBeams gunBeams;                              // Fires and draws the beams (more than one with the Multi Shot upgrade).
         PlayerUpgrades upgrades;                        // Reference to the player's upgrades.
+        PlayerAmmo ammo;                                // Reference to the player's magazine.
 
 
         void Awake ()
@@ -50,14 +51,14 @@ namespace CompleteProject
 
 #if !MOBILE_INPUT
             // If the Fire1 button is being press and it's time to fire...
-            if(Mouse.current != null && Mouse.current.leftButton.isPressed && timer >= timeBetweenBullets && Time.timeScale != 0)
+            if(Mouse.current != null && Mouse.current.leftButton.isPressed && timer >= timeBetweenBullets && Time.timeScale != 0 && ConsumeAmmo ())
             {
                 // ... shoot the gun.
                 Shoot ();
             }
 #else
             // If there is input on the shoot direction stick and it's time to fire...
-            if ((CrossPlatformInputManager.GetAxisRaw("Mouse X") != 0 || CrossPlatformInputManager.GetAxisRaw("Mouse Y") != 0) && timer >= timeBetweenBullets)
+            if ((CrossPlatformInputManager.GetAxisRaw("Mouse X") != 0 || CrossPlatformInputManager.GetAxisRaw("Mouse Y") != 0) && timer >= timeBetweenBullets && ConsumeAmmo ())
             {
                 // ... shoot the gun
                 Shoot();
@@ -69,6 +70,17 @@ namespace CompleteProject
                 // ... disable the effects.
                 DisableEffects ();
             }
+        }
+
+
+        // Uses a round if there is one. Without a PlayerAmmo the gun has unlimited ammo.
+        bool ConsumeAmmo ()
+        {
+            // The ammo component is added at runtime, so look it up lazily.
+            if(ammo == null)
+                ammo = GetComponentInParent <PlayerAmmo> ();
+
+            return ammo == null || ammo.TryConsume ();
         }
 
 

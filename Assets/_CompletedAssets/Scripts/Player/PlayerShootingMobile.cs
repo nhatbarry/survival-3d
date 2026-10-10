@@ -20,6 +20,7 @@ namespace CompleteProject
         float effectsDisplayTime = 0.2f;                // The proportion of the timeBetweenBullets that the effects will display for.
         GunBeams gunBeams;                              // Fires and draws the beams (more than one with the Multi Shot upgrade).
         PlayerUpgrades upgrades;                        // Reference to the player's upgrades.
+        PlayerAmmo ammo;                                // Reference to the player's magazine.
 
 
         void Awake ()
@@ -49,7 +50,7 @@ namespace CompleteProject
 
 
             // If there is input on the shoot direction stick and it's time to fire...
-			if ((JoystickFire.instance.Fire) && timer >= timeBetweenBullets)
+			if ((JoystickFire.instance.Fire) && timer >= timeBetweenBullets && ConsumeAmmo ())
             {
                 // ... shoot the gun
                 Shoot();
@@ -64,6 +65,17 @@ namespace CompleteProject
                 // ... disable the effects.
                 DisableEffects ();
             }
+        }
+
+
+        // Uses a round if there is one. Without a PlayerAmmo the gun has unlimited ammo.
+        bool ConsumeAmmo ()
+        {
+            // The ammo component is added at runtime, so look it up lazily.
+            if(ammo == null)
+                ammo = GetComponentInParent <PlayerAmmo> ();
+
+            return ammo == null || ammo.TryConsume ();
         }
 
 

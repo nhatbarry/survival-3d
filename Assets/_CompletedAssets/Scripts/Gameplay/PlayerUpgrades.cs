@@ -14,7 +14,9 @@ namespace CompleteProject
         Regeneration,
         Lifesteal,
         Luck,
-        ComboTime
+        ComboTime,
+        ExtendedMag,
+        FastHands
     }
 
     public struct UpgradeInfo
@@ -48,11 +50,14 @@ namespace CompleteProject
         public float dropChancePerLevel = 0.08f;
         public float powerUpDurationPerLevel = 2f;
         public float comboWindowPerLevel = 1f;
+        public int magazinePerLevel = 10;              // Extra rounds per magazine.
+        public float reloadTimePerLevel = 0.15f;       // -15% reload time.
 
 
         readonly Dictionary<UpgradeType, int> levels = new Dictionary<UpgradeType, int> ();
         PlayerHealth playerHealth;
         PlayerPowerUps powerUps;
+        PlayerAmmo ammo;
         PlayerMovement movement;
         PlayerMovementMobile movementMobile;
         float baseSpeed, baseSpeedMobile;
@@ -63,11 +68,13 @@ namespace CompleteProject
         public float DamageMultiplier => 1f + damagePerLevel * GetLevel (UpgradeType.Damage);
         public float FireIntervalMultiplier => 1f / (1f + fireRatePerLevel * GetLevel (UpgradeType.FireRate));
         public float MoveSpeedMultiplier => 1f + moveSpeedPerLevel * GetLevel (UpgradeType.MoveSpeed);
+        public float ReloadTimeMultiplier => Mathf.Max (0.1f, 1f - reloadTimePerLevel * GetLevel (UpgradeType.FastHands));
 
 
         void Awake ()
         {
             playerHealth = GetComponent <PlayerHealth> ();
+            ammo = GetComponent <PlayerAmmo> ();
             movement = GetComponent <PlayerMovement> ();
             movementMobile = GetComponent <PlayerMovementMobile> ();
 
@@ -141,6 +148,9 @@ namespace CompleteProject
                     return PickupManager.HasInstance;
                 case UpgradeType.ComboTime:
                     return ComboManager.HasInstance;
+                case UpgradeType.ExtendedMag:
+                case UpgradeType.FastHands:
+                    return ammo != null;
                 default:
                     return true;
             }
@@ -208,6 +218,14 @@ namespace CompleteProject
                 case UpgradeType.ComboTime:
                     ComboManager.Instance.comboWindow += comboWindowPerLevel;
                     break;
+
+                case UpgradeType.ExtendedMag:
+                    ammo.AddMagazineCapacity (magazinePerLevel);
+                    break;
+
+                case UpgradeType.FastHands:
+                    ammo.reloadTimeMultiplier = ReloadTimeMultiplier;
+                    break;
             }
         }
 
@@ -246,6 +264,16 @@ namespace CompleteProject
                 case UpgradeType.ComboTime:
                     return new UpgradeInfo ("Combo Master", "+" + comboWindowPerLevel + "s to keep your combo going",
                         2, new Color (1f, 0.75f, 0.4f));
+                case UpgradeType.ExtendedMag:
+                    int magazine = ammo != null ? ammo.MagazineSize : 0;
+                    return new UpgradeInfo ("Extended Mag", "+" + magazinePerLevel + " rounds per magazine (" + magazine + " > " + (magazine + magazinePerLevel) + ")",
+                        4, new Color (0.75f, 0.7f, 1f));
+                case UpgradeType.FastHands:
+                    float baseReload = ammo != null ? ammo.reloadTime : 0f;
+                    float nextMultiplier = Mathf.Max (0.1f, 1f - reloadTimePerLevel * (GetLevel (type) + 1));
+                    return new UpgradeInfo ("Fast Hands", Percent (reloadTimePerLevel) + " faster reload ("
+                        + (baseReload * ReloadTimeMultiplier).ToString ("0.0") + "s > " + (baseReload * nextMultiplier).ToString ("0.0") + "s)",
+                        3, new Color (0.55f, 0.95f, 1f));
                 default:
                     return new UpgradeInfo (type.ToString (), "", 1, Color.white);
             }

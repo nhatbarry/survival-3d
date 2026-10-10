@@ -26,6 +26,9 @@ namespace CompleteProject
 
             if(player.GetComponent <PlayerPowerUps> () == null)
                 player.gameObject.AddComponent <PlayerPowerUps> ();
+            // PlayerAmmo before PlayerUpgrades, which looks it up in Awake.
+            if(player.GetComponent <PlayerAmmo> () == null)
+                player.gameObject.AddComponent <PlayerAmmo> ();
             if(player.GetComponent <PlayerUpgrades> () == null)
                 player.gameObject.AddComponent <PlayerUpgrades> ();
 
@@ -37,6 +40,7 @@ namespace CompleteProject
             Ensure <LevelManager> (ref host);
             Ensure <GameplayHUD> (ref host);
             Ensure <UpgradeMenu> (ref host);
+            Ensure <ReloadButton> (ref host);
         }
 
 
